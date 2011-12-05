@@ -1,0 +1,218 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+    <title>FotoWeb 7.0</title>
+    <script type="text/javascript" src="javascript/jquery-1.4.2.min.js"></script>
+    <script type="text/javascript" src="javascript/jquery.tmpl.js"></script>
+    <script type="text/javascript" src="javascript/jquery-ui-1.8.6.custom.min.js"></script>
+    <script type="text/javascript" src="javascript/fotowebClient.js"></script>
+    <script type="text/javascript" src="javascript/tdb.js"></script>
+    <script type="text/javascript" src="javascript/jsTree/jquery.jstree.js"></script>
+    <link href="css/smoothness/jquery-ui-1.8.5.custom.css" rel="stylesheet" type="text/css" />
+    <link type="text/css" href="css/main.css" rel="Stylesheet" />
+    <script type="text/javascript">
+        //
+        // Initializing the document and making sure everything is ready
+        //
+
+        $(document).ready(function () {
+
+            //Disabling caching on ajax calls:
+            $.ajaxSetup({ cache: false });
+            
+            //Setting users default archive
+
+            CurrentArchive = <%$=currentUser.defaultArchive.id %>;
+            getArchiveInformation(CurrentArchive, function (data) {
+                currentArchiveInformation = data;
+            });
+            <%$ ListArchives %>
+                <%$ CompareNumbers lhsValue=$archive.id rhsValue=$currentUser.defaultArchive.id %>
+                    currentArchiveName = '<%$=archive.name %>'
+                <%$ /CompareNumbers %>
+            <%$ /ListArchives %>
+
+
+            //Setting up the dropdowns, buttons and other UI handlers:
+
+            fillArchiveTree();
+
+            attachMenuEvents();
+            attachButtonEvents();
+            attachWorkflowWindowEvents();
+            attachPreviewWindowEvents();
+            attachLoginWindowEvents();
+
+            setupScrollHandler();
+
+            // Prepare the progressbar
+
+            $('#loaderProgress').progressbar({ value: 100 });
+
+            // ensure we keep our session alive
+            enableKeepAliveTimer();
+
+            // prepare for first query
+
+            FilesPerPage = calculateNumberOfFiles();
+            $('#query').select();
+
+
+            //Possibly show the login dialog
+            $('div#login').dialog(
+        	{
+        	    <%$ CompareNumbers lhsVariable="currentUser.id" rhsValue="15000" comparison="Equal" %>
+        	    autoOpen: true,
+        	    <%$ /CompareNumbers %>
+        	    <%$ CompareNumbers lhsVariable="currentUser.id" rhsValue="15000" comparison="Great" %>
+        	    autoOpen: false,
+        	    <%$ /CompareNumbers %>
+        	    minWidth: 320,
+        	    resizable: false,
+        	    title: 'Welcome to FotoWeb 7.0',
+        	    modal: true
+        	});
+
+            //Set current user
+            currentUserFullName = '<%$=currentUser.fullName%>';
+
+            
+            //Initialize fotowebClient and execute first search when done
+            initialize(executeSearch);
+        }
+    );
+    </script>
+    <script id="thumbTemplate" type="text/html">
+        <%§ include virtual="thumbTemplate.inc" §%>
+    </script>
+    <script id="previewTemplate" type="text/html">
+        <%§ include virtual="previewTemplate.inc" §%>
+    </script>
+    <script id="workflowTemplate" type="text/html">
+        <%§ include virtual="workflowTemplate.inc" §%>
+    </script>
+</head>
+<!-- ------------------------------------------------------------------------------------------------------------------
+	 
+	  	 PAGE CONTENT
+	 
+	------------------------------------------------------------------------------------------------------------------- -->
+<body>
+    <%§ include virtual="loginTemplate.inc" §%>
+    <div id="previewWindow">
+    </div>
+    <!-- Query box, top of the page control for search and tools -->
+    <div id="querybox">
+        <img id="logo" src="images/FWLogoBlack.png" />
+        <div id="todayContainer">
+            <div id="todayImage" class="green medium awesome checked">
+                <img src="images/calendar-day.png" />
+            </div>
+        </div>
+        <div id="archiveListContainer">
+            <div id="archivesImage" class="medium awesome">
+                <img src="images/database.png" /></div>
+            <div id="archiveList">
+            </div>
+        </div>
+        <div id="searchTreeContainer">
+            <div id="searchTreeImage" class="medium awesome">
+                <img src="images/sitemap.png" /></div>
+            <div id="searchTreeList">
+            </div>
+        </div>
+        <input type="text" name="query" id="query" value="" />
+        <button id="executeQuery" class="medium awesome" name="executeQuery">
+            Search</button>
+        <!--         <a id="optionsLink" class="scriptLink">Options</a> -->
+        <div id="currentUser">
+            <%$ ifnot currentUser.isGuest %>
+            <%$ if Site.ShowLoginLink %>
+            <a id="titleBarLogout" href="/fotoweb/cmdrequest/Logout.fwx">
+                <translate>Logout</translate>
+            </a><span>(<%$=currentUser.fullName%>)</span>
+            <%$endif%>
+            <%$else%>
+            <%$ if Site.ShowLoginLink %>
+            <a id="titleBarLogin" href="#">
+                <translate>Log in</translate>
+            </a>
+            <%$endif%>
+            <%$endif%>
+        </div>
+    </div>
+    <div id="topSpacer">
+    </div>
+    <!-- Container for hits and views -->
+    <div id="contentContainer">
+    	<%$ if currentUser.allowUpload %>
+			<a href=" /TelechargementFW/Telechar.aspx?<%$=currentUser.fullName%>" target="_page">Importer dans la base</a>
+		<%$ endif %>
+        <div id="hits">
+            <div id="searchHints" class="hint">
+                <h1>
+                    Type your search above</h1>
+                <p>
+                    Type in your search above and hit Enter or the Search button.</p>
+            </div>
+        </div>
+    </div>
+    <div class="clear">
+    </div>
+    <!--<div id="hitTemplateThumbnailGrid">
+    </div>-->
+    <div id="allHitsLoaded" style="display: none">
+        <!-- displayed when no more hits to fetch from server -->
+        <h2>
+            (That's all, folks!)</h2>
+    </div>
+    <div id="bottomSpacer">
+    </div>
+    <!-- ensures content does not collide with status bar -->
+    <!-- Status information bar shown at bottom of the screen -->
+    <div id="loader" style="display: none">
+        <div id="loaderProgress">
+        </div>
+        <h2 id="loaderText">
+            Please wait, chatting with the server...</h2>
+    </div>
+    <div id="status">
+        <p id="statusText">
+        </p>
+        <p id="selectionText">
+        </p>
+        <div id="orientation">
+            <span id="currentSearch"></span>
+            <span id="currentHits"></span>
+
+        </div>
+    </div>
+
+    <div id="hitTemplateList" style="display: none">
+        <div id="Id" class="listItem">
+            <p id="fn">
+                Filename</p>
+        </div>
+    </div>
+    <div id="searchHintsTemplate" style="display: none">
+        <div id="templateId" class="hint">
+            <h1>
+                Sorry, did you mean to search?</h1>
+            <p>
+                Type in your search above and hit Enter or the Search button.</p>
+            <p>
+                More hints here...</p>
+        </div>
+    </div>
+    <div id="noHitsHintsTemplate" style="display: none">
+        <div id="templateId" class="hint">
+            <h1>
+                Sorry, can't find that!</h1>
+            <p>
+                It seems we don't have anything of what you're looking for this time.</p>
+            <p>
+                Try some other words, or maybe check your spelling?</p>
+        </div>
+    </div>
+</body>
+</html>

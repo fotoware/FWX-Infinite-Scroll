@@ -1,0 +1,39 @@
+<Markers version="1.0">
+
+	<Marker name="Photo Retenue" 
+	        desc="Photo Retenue" 
+	        icon="images/tag_red.png"
+	        field="210"
+	        regex="ret" /> <!-- value is a regular expression matched against the specified field -->
+
+    <Marker name="Photo Dupliquée" 
+	        desc="Photo Dupliquée" 
+	        icon="images/tag_orange.png"
+	        field="211"
+	        regex="dup" />
+	        
+	<Marker name="Photo Hermes" 
+	        desc="Photo Hermes" 
+	        icon="images/tag_green.png"
+	        field="212"
+	        regex="her" />
+	        
+	<Marker name="Photo Rejetée" 
+	        desc="Photo Rejetée" 
+	        icon="images/tag_blue.png"
+	        field="213"
+	        regex="rej" />
+	        
+	<Marker name="Photo Doc" 
+	        desc="Photo Doc" 
+	        icon="images/tag_purple.png"
+	        field="214"
+	        regex="doc" />
+	        
+	<Marker name="Photo Sensible et trés sensible" 
+	        desc="Photo Sensible et trés sensible" 
+	        icon="images/tag_red.png"
+	        field="203"
+	        regex="[1]{1}|[2]{1}" />
+	        
+</Markers>

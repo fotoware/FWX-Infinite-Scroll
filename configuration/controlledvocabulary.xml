@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ControlledVocabulary version="1.0">
+  <CVDestination id="1001">
+    <CVNode field="20" label="Norway" value="NOR">
+      <CVNode field="25" label="Oslo" value="Oslo" />
+      <CVNode field="25" label="Bergen" value="Bergen" />
+      <CVNode field="25" label="Trondheim" value="Trondheim" />
+    </CVNode>
+    <CVNode field="20" label="Sweden" value="SWE">
+      <CVNode field="25" label="Stockholm" value="Stockholm" />
+      <CVNode field="25" label="Göteborg" value="Göteborg" />
+      <CVNode field="25" label="Strömstad" value="Strømstad" />
+    </CVNode>
+  </CVDestination>
+
+  <CVNode field="120" label="Default text" value="This is the default caption text">
+    <CVNode field="200" label="This is a mess" value="No, it isn't" />
+    <CVNode field="200" label="Yes it is" value="OK, i guess it is" />
+  </CVNode>
+  <CVNode field="120" label="Not so default text" value="This is another caption text">
+    <CVNode field="230" label="Hey" value="Hey man what's going on?" />
+    <CVNode field="230" label="Ho" value="The shit is bananas" />
+  </CVNode>
+</ControlledVocabulary>

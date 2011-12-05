@@ -1,0 +1,896 @@
+y<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<!-- 
+
+	FotoWeb 7.0 - Template for public access and quick browsing
+	
+	Smart coders always view source :)
+	
+	
+	BETA SOFTWARE
+	This template is in BETA and does not contain all functionality that is intended
+	to be included when it is ready for shipping. However, the infinite scroll
+	mechanism should work correctly in all browsers.
+	
+	
+	ABOUT THIS TEMPLATE
+	This template is designed for users that only search for and download files from a server
+	and therefore does not give access to many of the other functions in FotoWeb. It is designed
+	to allow scrolling through large result sets without pagination.
+	
+	This is beneficial for users, but also has bigger requirements for the client computers
+	in CPU time and memory. Beware!
+	
+	Also, these are designed for the latest and best. No compatibility with older browsers. Sorry.
+	
+	
+	LEGAL STUFF
+	
+	Author: Christopher Frenning, cf@fotoware.com
+	Copyright (C) FotoWare a.s. 2010. All rights reserved.
+	
+	You may access this template from FotoWare's demo site (fotoweb.fotoware.com) but MAY NOT
+	use it on any other servers, modify it, or in any other way reuse or redistribute this code. 
+	It will be released under an open source license when ready for use in production environments, 
+	but we do not want anyone to spend valuable time working on this right now.
+
+-->
+<head>
+	<title>FotoWeb 7.0 - Inifinte Scroll BETA</title>
+	
+	<!-- ------------------------------------------------------------------------------------------------------------------
+	 
+	  	 SCRIPT
+	 
+	------------------------------------------------------------------------------------------------------------------- -->
+	 
+	<link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css" rel="stylesheet" type="text/css"/>
+	
+	<script type="text/javascript" src="debug.js"></script>
+	<!--<script type="text/javascript" src="jquery.js"></script>-->
+  	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4/jquery.min.js"></script>
+  	<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/jquery-ui.min.js"></script>
+  
+	<script type="text/javascript">
+	
+	
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// APPLICATION VARIABLES
+		//
+		
+		var Debug = true;
+		var KeepAliveTimer = null;
+		
+	
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// PAGE VARIABLES
+		//
+		
+		var ArchiveAgentUrl 	=  "http://fotoweb.fotoware.com/fotoweb/fwbin/fotoweb_isapi.dll/ArchiveAgent/5000/";
+		var CurrentSearch 		= 	"";
+		var FilesPerPage 		= 	16;
+		var ThumbnailSize		=	200;
+		var ElementSizeX		=	230;
+		var ElementSizeY    	=   230;
+		var AutoLoad 			= 	false;
+		var AutoLoadMaxHits  	= 	2000;
+		
+		var CurrentQuery		= 	"";
+		var CurrentArchive		=	5000;
+
+		
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// PAGE LOGIC
+		//
+	
+
+		//
+		// Initializing the document and making sure everything is ready
+		//
+		
+		$(document).ready(
+			function()
+			{
+				debug.debug( 'Document ready.' );
+				
+				setupResizeHandler();
+   				setupScrollHandler();
+   				
+   				
+   				// start loading of archives
+   				
+   				keepSessionAlive();
+   				
+   				
+   				// wire up the events for handling user search input
+   				
+	   			$('#executeQuery').click( function(e) { executeSearch(); } );
+   				$('#query').keyup(	function(e) { if ( e.keyCode == 13 ) { debug.debug( 'enter in query' ); executeSearch(); } } );
+   				$('#optionsLink').click( function(e) { openCloseDialog( $('#optionsDialog') ) } );
+   				
+   				
+   				// prepare our dialogs and user interface elements
+   				
+   				$('#optionsDialog').dialog( {autoOpen: false, closeOnEscape: true, modal: true, zIndex: 300 } );
+   				$('#previewDialog').dialog( {autoOpen: false, closeOnEscape: true, modal: true, zIndex: 300 } );	
+   				
+   				$( '#loaderProgress' ).progressbar( { value: 100 } );
+   				
+   				
+   				// ensure we keep our session alive
+   				
+   				if ( Debug )
+   					KeepAliveTimer = window.setInterval( "keepSessionAlive()", 1000 );
+   				else
+   					KeepAliveTimer = window.setInterval( "keepSessionAlive()", 1000 * 60 );
+   				
+   				
+   				// prepare for first query
+   				
+   				FilesPerPage = calculateNumberOfFiles( );
+   								
+   				
+   				// debug setup for lazy programmers
+   				if ( Debug )
+   				{
+   					$('#query').val("music");
+   					executeSearch( );
+   				}
+   				
+   				$('#query').select();
+ 			}
+ 		);
+ 		
+ 		
+ 		
+ 		function openCloseDialog( dlg )
+ 		{
+			if ( dlg.dialog( "isOpen" ) )
+				dlg.dialog( "close" );
+			else
+				dlg.dialog( "open" );	
+ 		}
+ 		
+ 		
+ 		
+ 		function setupResizeHandler()
+ 		{
+	 		// Todo: We want to recalculate the number of images that fit on a page
+	 		// and ensure that we fill up the last row of the grid and load
+	 		// one page at a time from the server
+ 		}
+ 		
+ 		
+ 		
+ 		function setupScrollHandler()
+ 		{
+ 			$(window).scroll(
+ 				function()
+ 				{
+ 					var m = ($(document).height() - $(window).height()) - $(window).scrollTop();
+ 					if ( (($(document).height() - $(window).height()) - $(window).scrollTop()) < (ElementSizeY * 2) )
+ 					{
+			           doLoadMoreHits();
+			        }
+				}
+			);
+ 		}
+ 	
+  		
+  		
+  		function calculateNumberOfFiles( )
+  		{
+  			// We'll load twice as many rows as fits on screen to
+  			// allow smooth scrolling of the search result
+  			
+  			var columns = Math.floor( $('#hits').width() / ElementSizeX );
+  		  	var rows = Math.floor( ($(document).height() / ElementSizeY) ) * 2;
+  		  	
+  		  	debug.debug( 'Page size is ' + columns + ' x ' + rows );
+  			return columns * rows;
+  		}
+ 		
+ 		
+		
+		function getUserQuery( )
+		{
+			var searchStr = $('#query').attr('value');
+			return searchStr;
+		}
+		
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// SEARCH LOGIC
+		//
+		
+		var SEARCHRESULTS =
+		{
+			TotalHits: 0,
+			HitList: []
+		}
+		
+		var isProcessingQuery = false;
+		
+		
+		
+		function executeSearch()
+		{
+			$('#allHitsLoaded').hide();
+			$('#query').select();
+			
+			if ( getUserQuery() == "" )
+			{
+				insertSearchHints();
+			}
+			else
+			{
+				// autoload?
+				
+				if ($('#autoloadChk').is(':checked') ) 
+				{
+					debug.debug( 'Autoload enabled.' );
+					AutoLoad = true;
+				}
+				else
+				{
+					debug.debug( 'Autoload disabled.' );
+					AutoLoad = false;
+				}
+				
+				CurrentQuery = getUserQuery();
+				CurrentArchive = $('#archiveSelector').val();
+
+				debug.debug( "Executing search for '" + getUserQuery() + "', autoload is " + AutoLoad );
+				$('#hits').empty();
+				doServerQuery( getUserQuery(), 0, FilesPerPage, initialQueryCallback );
+			}
+	
+  		}
+  		
+  		
+  		
+  		function doServerQuery( query, skip, take, callback )
+  		{
+			setProcessingState( true );
+  			var url = ArchiveAgentUrl + 'Search?Search=SearchString&MaxHits=PerPage&FileInfo=0&MetaData=0&Skip=Pos';
+  			url = url.replace( '/5000/', '/' + CurrentArchive + '/' );
+  			debug.debug( "Querying archive " + CurrentArchive + " for '" + query + "', skip: " + skip + ", take " + take );
+			
+			url = url.replace( 'SearchString', escape( query ) );
+			url = url.replace( 'PerPage', take );
+			url = url.replace( 'Pos', skip );
+			
+			$.get( url, callback );
+  		}
+  		
+  		
+  		
+  		function doLoadMoreHits( )
+  		{
+	  		if ( SEARCHRESULTS.TotalHits > 0 && !isProcessingQuery )
+  			{
+  				//debug.debug( 'User scrolled to end of page, may need to load more hits.' );
+  				
+  				if ( SEARCHRESULTS.TotalHits > SEARCHRESULTS.HitList.length )
+  				{
+  					debug.debug( 'More hits on server, requesting a new page.' );
+  					
+  					setProcessingState( true );
+  					doServerQuery( CurrentQuery, SEARCHRESULTS.HitList.length, FilesPerPage, loadMoreHitsCallback );
+  				}
+  				else
+  				{
+  					if ( $('#allHitsLoaded').is(":hidden") )
+  					{
+  						debug.debug( 'We\'ve already loaded all hits, informing user.' );
+  						$('#allHitsLoaded').show();
+  					}
+  				}
+  			}
+  			
+  			
+  			// If user is near the three last pages, load more hits
+  			
+  			//debug.debug( 'Scrolltop ' + $(window).scrollTop() + ', docHeight ' + $(document).height() + ', windowHeight ' + $(window).height() );
+  			
+  			if ( AutoLoad && SEARCHRESULTS.HitList.length < AutoLoadMaxHits )
+  				setTimeout( doLoadMoreHits, 500 );
+  			else if ( $(window).scrollTop() > $(document).height() - ($(window).height() * 3) )
+  				setTimeout( doLoadMoreHits, 500 );
+  		}
+  		
+  		
+  		
+  		function initialQueryCallback( data )
+  		{
+  			// TODO: Validate the results and ensure proper error checking if we did not 
+  			// get the expected result back
+  			
+  			// We've got results, process it
+  			
+  			var numberOfHits = $(data).find('FileList').attr('TotalHits');
+  			SEARCHRESULTS.TotalHits = numberOfHits;
+  			SEARCHRESULTS.HitList = createHitList( data );
+  			debug.debug( 'Query returned ' + SEARCHRESULTS.HitList.length + ' records of ' + numberOfHits + ' hits.' );
+  			
+  			if ( SEARCHRESULTS.TotalHits > 0 )
+				insertHitItemsInView( SEARCHRESULTS.HitList );
+			else
+				insertNoHitsHints( );
+			
+			setProcessingState( false );
+			
+			setTimeout( doLoadMoreHits, 500 );
+  		}
+  		
+  		
+  		
+  		function loadMoreHitsCallback( data )
+  		{
+			var moreHits = createHitList( data );
+			debug.debug( 'Query (contd) returned ' + moreHits.length + ' hits.' );
+			
+			var j = SEARCHRESULTS.HitList.length;
+			for ( var i = 0; i < moreHits.length; i++ )
+			{
+				SEARCHRESULTS.HitList[ j ] = moreHits[ i ];
+				SEARCHRESULTS.HitList[ j ].ItemNo = j;
+				j++;
+			}
+			insertHitItemsInView( moreHits );
+			
+			setProcessingState( false );
+  		}
+  		
+  		
+  		
+  		function createHitList( xml )
+  		{
+  			var hitList = [];
+  			var index = 0;
+  			
+  			$(xml).find('FileList > File').each( 
+  				function()
+  				{
+  					var HitInfo = 
+  					{
+  						FileName: $(this).attr( 'Name' ),
+  						FoxToken: $(this).attr( 'X-FoxToken' ),
+  						Xml: $(this),
+  						ItemNo: index
+  					}
+  						
+					hitList[ index++ ] = HitInfo;
+  				}
+  			);
+  						
+  			return hitList;
+  		}
+  		
+  		
+  		
+  		function getIndexFromItem( item )
+  		{
+  			return item.ItemNo;
+  		}
+  		
+  		
+  		
+  		function setProcessingState( isProcessing )
+  		{
+  			isProcessingQuery = isProcessing;
+  			
+  			if ( isProcessingQuery )
+  			{
+  				$('#loader').show();
+   			}
+  			else
+  			{
+  				$('#loader').hide();
+  			}
+  		}
+  				
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// RENDERING LOGIC
+		//
+		
+		
+  		
+  		function insertHitItemsInView( itemList )
+  		{
+  			for ( var i = 0; i < itemList.length; i++ )
+  			{
+  				var template = loadTemplate( );
+				var itemIx = getIndexFromItem( itemList[ i ] );  
+								
+  				template = template.replace( 'Id', 'itm' + itemIx );
+  				template = template.replace( 'Ix', itemIx );
+  				template = template.replace( 'FoxToken', itemList[ i ].FoxToken );
+  				template = template.replace( 'Filename', itemList[ i ].FileName );
+  				template = template.replace( 'PreviewUrl', createThumbnailUrl( itemList[ i ].FoxToken ) );
+  				
+  				$('#hits').append( template );
+  				$('#itm' + itemList[ i ].ItemNo).click( function(e) { showPreviewDialog($(this).attr('id')); } );
+  			} 			
+   		}
+   		
+   		
+  		
+  		function createThumbnailUrl( foxToken )
+  		{
+  			return createPreviewUrl( foxToken, ThumbnailSize );
+  		}
+  		
+  		
+  		function createPreviewUrl( foxToken, size )
+  		{
+  			var url = ArchiveAgentUrl.replace( '/fwbin/fotoweb_isapi.dll/ArchiveAgent/5000/', '/cmdrequest/rest/Preview.fwx?f=token&sz=size' );
+  			
+  			url = url.replace( 'token', foxToken );
+  			url = url.replace( 'size', size );
+  			
+  			return url;
+  		}
+  		
+  		
+  		
+  		function loadTemplate( )
+  		{
+  			return $('#hitTemplateThumbnailGrid').attr('innerHTML');
+  		}
+  		
+  		
+  		
+  		function insertSearchHints( )
+  		{
+  			var template = $('#searchHintsTemplate').attr('innerHTML');
+  			template = template.replace( 'templateId', 'searchHints' );
+  			$('#hits').empty();
+  			$('#hits').append( template );
+  		}
+  		
+  		
+  		
+  		function insertNoHitsHints( )
+  		{
+  			var template = $('#noHitsHintsTemplate').attr('innerHTML');
+  			template = template.replace( 'templateId', 'noHitsHints' );
+  			$('#hits').empty();
+  			$('#hits').append( template );
+  		}
+  				
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// APPLICATION LOGIC
+		//
+		
+		function showPreviewDialog( itemNo )
+		{
+			var item = getItemFromId( itemNo );
+			
+			$('#previewImg').attr('src', createPreviewUrl( item.FoxToken, 700 ) );
+			$('#objectName').html('Hello world');
+			
+			$('#previewDialog').dialog( "open" );
+			
+		}
+  				
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+		//
+		// APPLICATION LOGIC
+		//
+		
+		function keepSessionAlive( )
+		{
+			 debug.debug( 'Sending keepalive.' );
+			 var url = ArchiveAgentUrl.replace( '5000/', '' );
+			 $.get( url, getArchivesCallback );
+		}
+		
+		
+		
+		function getArchivesCallback( data )
+		{
+			if ( $('#archiveSelector').html() == "" )
+			{
+			
+				$(data).find('ArchiveList > Archive').each( 
+  					function()
+  					{
+  						$('#archiveSelector').append( '<option value="' + $(this).attr('Id') + '">' + $(this).attr('Name') + '</option>' );
+  					}
+  				);
+  				
+  				$('#archiveSelector').val( '5000' );
+
+			}
+		}
+		
+		
+		function getItemFromId( id )
+		{
+			var id = id.substring( 3 );
+			return SEARCHRESULTS.HitList[ id ];
+		}
+		
+  		
+	</script>
+	
+	
+	<!-- ------------------------------------------------------------------------------------------------------------------
+	 
+	  	 STYLING
+	 
+	------------------------------------------------------------------------------------------------------------------- -->
+	
+	<style type="text/css">
+		#query
+		{
+			font-size: 18px;
+			-moz-border-radius: 5px; 
+			-webkit-border-radius: 5px;
+			border: 1px solid #cccccc;
+			width: 450px;
+			padding-left: 5px;
+		}
+		
+		#executeQuery, #query, #logo
+		{
+			height: 38px;
+			vertical-align: middle;
+		}
+		
+		#querybox
+		{
+			height: 50px;
+			width: 100%;
+			border-bottom: solid 1px #666666;
+			text-align: center;
+			position: fixed;
+			left: 0;
+			top: 0;
+			padding-top: 10px;
+			background: #eeeeee;
+		}
+		
+		#topSpacer
+		{
+			margin-top: 60px;
+		}
+		
+		#bottomSpacer
+		{
+			height: 45px;
+		}
+		
+		#contentContainer
+		{
+			width: 100%;
+			text-align: center;
+		}
+		
+		#hits
+		{
+			/*margin-left: auto;
+			margin-right: auto;
+			width: auto;*/
+		}
+		
+		.thumbnailGridItem 
+		{ 
+			xfloat: left;
+			display: inline-block;
+			width: 230px;
+			height: 230px;
+			border: solid 1px #cccccc;
+			-moz-border-radius: 5px; 
+			-webkit-border-radius: 5px;
+			margin: 5px;
+			padding: 5px;
+			text-align: center;
+			vertical-align: middle;
+		}
+		
+		.hint
+		{
+			width: 100%;
+			height: 300px;
+			padding-top: 50px;
+			vertical-align: middle;
+			text-align: center;
+		}
+		
+		.hint p
+		{
+			margin-top: 15px;
+		}
+		
+		#allHitsLoaded
+		{
+			width: 100%;
+			text-align: center;
+			margin-top: 20px;
+		}
+		
+		#allHitsLoaded h2
+		{
+			font-size: 18px;
+		}
+		
+		#loader
+		{
+			width: 100%;
+			height: 30px;
+			position: fixed;
+			left: 0px;
+			bottom: 0px;
+			padding-top: 15px;
+			z-index: 200;
+			
+			text-align: center;
+			vertical-align: middle;
+			border-top: solid 1px #666666;
+			background-color: #eeeeee;
+		}
+		
+		#loaderText
+		{
+			text-align: left;
+			margin-left: 15px;
+			color: white;
+		}
+		
+		#loaderProgress
+		{
+			width: 200px;
+			height: 14px;
+			float: right;
+			margin-right: 15px;
+		}
+		
+		#status
+		{
+			width: 100%;
+			height: 30px;
+			position: fixed;
+			left: 0px;
+			bottom: 0px;
+			padding-top: 15px;
+			z-index: 100;
+			
+			text-align: center;
+			vertical-align: middle;
+			border-top: solid 1px #666666;
+			background-color: #eeeeee;
+		}
+		
+		#status #statusText
+		{
+			color: white;
+		}
+		
+		#status #selectionText
+		{
+			color: white;
+		}
+		
+		.clear
+		{
+			clear: both;
+		}
+		
+		.scriptLink
+		{
+			cursor: pointer;
+		}
+		
+		.ui-widget-overlay
+		{
+			background: black;
+			opacity: 0.6;
+		}		
+		
+		.ui-progressbar-value { background-image: url(http://jqueryui.com/demos/progressbar/images/pbar-ani.gif); }
+		
+		.awesome, .awesome:visited {
+			background: #222 url(overlay.png) repeat-x; 
+			display: inline-block; 
+			padding: 5px 10px 6px; 
+			color: #fff; 
+			text-decoration: none;
+			-moz-border-radius: 5px; 
+			-webkit-border-radius: 5px;
+			-moz-box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+			-webkit-box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+			text-shadow: 0 -1px 1px rgba(0,0,0,0.25);
+			border-bottom: 1px solid rgba(0,0,0,0.25);
+			position: relative;
+			cursor: pointer;
+		}
+ 
+		.awesome:hover									{ background-color: #111; color: #fff; }
+		.awesome:active									{ top: 1px; }
+		.small.awesome, .small.awesome:visited 			{ font-size: 11px; }
+		.awesome, .awesome:visited,
+		.medium.awesome, .medium.awesome:visited 		{ font-size: 13px; font-weight: bold; line-height: 1; text-shadow: 0 -1px 1px rgba(0,0,0,0.25); }
+		.large.awesome, .large.awesome:visited 			{ font-size: 14px; padding: 8px 14px 9px; }
+	
+		.green.awesome, .green.awesome:visited			{ background-color: #91bd09; }
+		.green.awesome:hover							{ background-color: #749a02; }
+		.blue.awesome, .blue.awesome:visited			{ background-color: #2daebf; }
+		.blue.awesome:hover								{ background-color: #007d9a; }
+		.red.awesome, .red.awesome:visited				{ background-color: #e33100; }
+		.red.awesome:hover								{ background-color: #872300; }
+		.magenta.awesome, .magenta.awesome:visited		{ background-color: #a9014b; }
+		.magenta.awesome:hover							{ background-color: #630030; }
+		.orange.awesome, .orange.awesome:visited		{ background-color: #ff5c00; }
+		.orange.awesome:hover							{ background-color: #d45500; }
+		.yellow.awesome, .yellow.awesome:visited		{ background-color: #ffb515; }
+		.yellow.awesome:hover							{ background-color: #fc9200; }
+		
+		body 
+		{
+			color: #555;
+			font-family: Arial, Helvetica, 'Helvetica Neue', Verdana, sans-serif;
+			font-size: 13px;
+			line-height: 18px;
+		}
+
+		h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, cite, code, img, small, strike, sub, sup, tt, dd, dl, dt, li, ol, ul, fieldset, form, 				label, legend, button, table, caption, tbody, tfoot, thead, tr, th, td, input 
+		{
+			border: 0px;
+			font-family: inherit;
+			font-size: 100%;
+			font-style: normal;
+			font-weight: normal;
+			line-height: 1;
+			margin: 0px;
+			padding: 0px;
+		}
+		
+		h1
+		{
+			font-size: 22px;
+		}
+		
+	</style>
+</head>
+
+	<!-- ------------------------------------------------------------------------------------------------------------------
+	 
+	  	 PAGE CONTENT
+	 
+	------------------------------------------------------------------------------------------------------------------- -->
+
+<body>
+
+
+
+	<!-- Query box, top of the page control for search and tools -->
+	
+	<div id="querybox">
+			<img id="logo" src="logo.png" />
+			<input type="text" name="query" id="query" value="" /> 
+			<button id="executeQuery" class="medium awesome" name="executeQuery">Search</button>
+			<a id="optionsLink" class="scriptLink">Options</a>
+	</div>
+	
+	<div id="topSpacer"></div>
+	
+	
+	
+	<!-- Container for hits and views -->
+	
+	<div id="contentContainer">
+		<div id="hits">
+			<div id="searchHints" class="hint">
+				<h1>Type your search above</h1>
+				<p>Type in your search above and hit Enter or the Search button.</p>
+			</div>
+		</div>
+	</div>
+	
+	<div class="clear"></div>
+	
+	<div id="allHitsLoaded" style="display: none"> <!-- displayed when no more hits to fetch from server -->
+		<h2>(That's all, folks!)</h2>
+	</div>
+	
+	<div id="bottomSpacer"></div> <!-- ensures content does not collide with status bar -->
+	
+	
+	
+	<!-- Status information bar shown at bottom of the screen -->
+	
+	<div id="loader" style="display: none">
+		<div id="loaderProgress"></div>
+		<h2 id="loaderText">Please wait, chatting with the server...</h2>
+	</div>
+	
+	<div id="status">
+		<p id="statusText"></p>
+		<p id="selectionText"></p>
+	</div>
+	
+	
+	
+	<!-- Popup dialogs for actions on hits or system -->
+	
+	
+	<div id="optionsDialog" title="Options">
+		<input type="checkbox" name="autoload" id="autoloadChk" value="1" /> <label for="autoloadChk">Automatically load all hits</label>
+		
+		<p>Archive: <select id="archiveSelector"></select></p>
+	</div>
+	
+	<div id="previewDialog" title="Preview">
+		<img id="previewImg" />
+		<p id="objectName"></p>
+	</div>
+	
+	
+	
+	<!-- List item templates, these are used when rendering search results -->
+	
+	<div id="hitTemplateThumbnailGrid" style="display: none">
+		<div id="Id" class="thumbnailGridItem">
+			<img id="thbIx" src="PreviewUrl" />
+			<!--<p id="fn">Filename</p>-->
+		</div>
+	</div>
+	
+	<div id="hitTemplateList" style="display: none">
+		<div id="Id" class="listItem">
+			<p id="fn">Filename</p>
+		</div>
+	</div>
+	
+	<div id="searchHintsTemplate" style="display: none">
+		<div id="templateId" class="hint">
+			<h1>Sorry, did you mean to search?</h1>
+			<p>Type in your search above and hit Enter or the Search button.</p>
+			<p>More hints here...</p>
+		</div>
+	</div>
+	
+	<div id="noHitsHintsTemplate" style="display: none">
+		<div id="templateId" class="hint">
+			<h1>Sorry, can't find that!</h1>
+			<p>It seems we don't have anything of what you're looking for this time.</p>
+			<p>Try some other words, or maybe check your spelling?</p>
+		</div>
+	</div>
+	
+	
+	<!-- ------------------------------------------------------------------------------------------------------------------
+	 
+	  	 Feedback and activity logging
+	 
+	------------------------------------------------------------------------------------------------------------------- -->
+	
+	<script type="text/javascript">var uservoiceOptions = {key: 'fotoware',host: 'feedback.fotoware.com',   forum: '74313',  showTab: true,  alignment: 'right',  background_color:'#f00',   text_color: 'white',  hover_color: '#06C',  lang: 'en'};function _loadUserVoice() {  var s = document.createElement('script');  s.setAttribute('type', 'text/javascript');  s.setAttribute('src', ("https:" == document.location.protocol ? "https://" : "http://") + "cdn.uservoice.com/javascripts/widgets/tab.js");  document.getElementsByTagName('head')[0].appendChild(s);}_loadSuper = window.onload;window.onload = (typeof window.onload != 'function') ? _loadUserVoice : function() { _loadSuper(); _loadUserVoice(); };</script><script type="text/javascript"> 
+ 
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-7411542-3']);
+  _gaq.push(['_trackPageview']);
+ 
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+ 
+</script> 
+
+</body>
+
+</html>
